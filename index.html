@@ -4,17 +4,50 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ภาษาลู — Lou Language Converter</title>
-  <meta name="description" content="แปลงภาษาไทยเป็นภาษาลู ทำให้ 1 พยางค์กลายเป็น 2 พยางค์">
-  <meta property="og:title" content="ภาษาลู — Lou Language Converter">
-  <meta property="og:description" content="แปลงภาษาไทยเป็นภาษาลูอัตโนมัติ">
-  <link rel="stylesheet" href="css/style.css">
+  <meta name="description" content="แปลงภาษาไทยเป็นภาษาลู ด้วย PyThaiNLP ใน Browser">
+  <link rel="stylesheet" href="./css/style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌟</text></svg>">
 </head>
 <body>
 
+<!-- ══ Loading Overlay ══════════════════════════════════════════════════════ -->
+<div id="loading-overlay">
+  <div class="loading-box">
+    <div class="loading-sign">
+      <span class="ls-lou">LOU</span>
+      <span class="ls-lang">กำลังโหลด</span>
+    </div>
+
+    <p class="loading-desc">
+      โหลด <strong>Pyodide + PyThaiNLP</strong> เพื่อตัดพยางค์ภาษาไทยอย่างถูกต้อง<br>
+      <small>ครั้งแรกใช้เวลา 15–30 วินาที หลังจากนั้น cache ไว้แล้ว</small>
+    </p>
+
+    <div class="progress-wrap">
+      <div class="progress-track">
+        <div id="loading-bar" class="progress-bar"></div>
+      </div>
+      <div class="progress-labels">
+        <span id="loading-step">เริ่มต้น…</span>
+        <span id="loading-pct">0%</span>
+      </div>
+    </div>
+
+    <div id="loading-error" style="display:none">
+      <p class="error-title">⚠ โหลดไม่สำเร็จ</p>
+      <p class="error-msg"></p>
+      <div class="error-btns">
+        <button id="btn-retry" class="btn btn-primary">ลองใหม่</button>
+        <button id="btn-use-fallback" class="btn btn-secondary">ใช้ Fallback mode</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ App ══════════════════════════════════════════════════════════════════ -->
 <div class="app-wrapper">
 
-  <!-- ── Header ── -->
+  <!-- Header -->
   <header class="header">
     <div class="logo-sign">
       <div class="sign-board">
@@ -26,11 +59,12 @@
       แปลงภาษาไทย → ภาษาลู &nbsp;|&nbsp;
       <em>1 พยางค์ → 2 พยางค์</em>
     </p>
+    <div id="engine-status" class="engine-status status-loading">กำลังโหลด PyThaiNLP…</div>
   </header>
 
   <div class="neon-divider"></div>
 
-  <!-- ── Input Card ── -->
+  <!-- Input Card -->
   <section class="converter-card">
     <p class="card-label">
       <span class="dot dot-pink"></span>
@@ -48,7 +82,7 @@
     ></textarea>
 
     <div class="input-meta">
-      <span id="char-count" class="char-count">0 ตัวอักษร</span>
+      <span id="char-count" class="char-count">0 / 500</span>
       <label class="realtime-row">
         <label class="toggle">
           <input type="checkbox" id="realtime-toggle">
@@ -67,7 +101,7 @@
     <p class="shortcut-hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> เพื่อแปลง</p>
   </section>
 
-  <!-- ── Output Card ── -->
+  <!-- Output Card -->
   <section class="output-card" id="output-card">
     <p class="card-label">
       <span class="dot dot-yellow"></span>
@@ -79,91 +113,58 @@
     </div>
   </section>
 
-  <!-- ── Syllable debug ── -->
+  <!-- Syllable Debug -->
   <details class="debug-panel">
-    <summary><span class="dot dot-cyan"></span> การแบ่งพยางค์</summary>
+    <summary><span class="dot dot-cyan"></span> การแบ่งพยางค์ (PyThaiNLP)</summary>
     <div id="syllable-debug"></div>
   </details>
 
-  <!-- ── Examples ── -->
+  <!-- Examples -->
   <section>
     <p class="section-title"><span class="dot dot-pink"></span> ตัวอย่างเร็ว</p>
     <div id="examples"></div>
   </section>
 
-  <!-- ── Rules reference ── -->
+  <!-- Rules -->
   <section>
     <p class="section-title"><span class="dot dot-cyan"></span> กฎภาษาลู</p>
     <div class="rules-grid">
-
       <div class="rule-card">
         <p class="rule-number">กฎ 1</p>
         <p class="rule-title">คำทั่วไป</p>
-        <p class="rule-ex">
-          ไม่มี ร/ล ต้น<br>
-          ไม่มีสระ อุ/อู<br>
-          ใช้ <strong>ล</strong> นำหน้า<br>
-          มาก → <span>ลากมูก</span>
-        </p>
+        <p class="rule-ex">ไม่มี ร/ล ต้น ไม่มีสระ อุ/อู<br>ใช้ <strong>ล</strong> นำหน้า<br>มาก → <span>ลากมูก</span></p>
       </div>
-
       <div class="rule-card">
         <p class="rule-number">กฎ 2</p>
         <p class="rule-title">ขึ้นต้น ร/ล</p>
-        <p class="rule-ex">
-          พยัญชนะต้น ร หรือ ล<br>
-          ใช้ <strong>ซ</strong> นำหน้า<br>
-          รัก → <span>ซักรุก</span>
-        </p>
+        <p class="rule-ex">พยัญชนะต้น ร หรือ ล<br>ใช้ <strong>ซ</strong> นำหน้า<br>รัก → <span>ซักรุก</span></p>
       </div>
-
       <div class="rule-card">
         <p class="rule-number">กฎ 3</p>
         <p class="rule-title">สระ อุ/อู</p>
-        <p class="rule-ex">
-          มีสระ อุ หรือ อู<br>
-          ใช้ <strong>หล</strong> นำหน้า<br>
-          อู→อี / อุ→อิ<br>
-          ดู → <span>ลูดู</span>
-        </p>
+        <p class="rule-ex">มีสระ อุ หรือ อู<br>ใช้ <strong>หล</strong> นำหน้า<br>อู→อี / อุ→อิ<br>ดู → <span>ลูดู</span></p>
       </div>
-
       <div class="rule-card">
         <p class="rule-number">กฎ 4</p>
         <p class="rule-title">ร/ล + อุ/อู</p>
-        <p class="rule-ex">
-          ร/ล ต้น + สระ อุ/อู<br>
-          ใช้ <strong>ซ</strong> นำหน้า<br>
-          อู→อี / อุ→อิ<br>
-          รู้ → <span>ซู้รี้</span>
-        </p>
+        <p class="rule-ex">ร/ล ต้น + สระ อุ/อู<br>ใช้ <strong>ซ</strong> นำหน้า<br>อู→อี / อุ→อิ<br>รู้ → <span>ซู้รี้</span></p>
       </div>
-
     </div>
   </section>
 
-  <!-- ── Footer ── -->
+  <!-- Footer -->
   <footer>
-    <p>Lou Language Engine — Pure JavaScript · No AI · No dependencies</p>
-    <p style="margin-top:0.3rem">
-      <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
-      &nbsp;·&nbsp;
-      เปิดแก้ไข Source ได้เลย
+    <p>PyThaiNLP + Pyodide · Pure Static · No Server · No AI</p>
+    <p style="margin-top:.3rem">
+      <a href="https://github.com/holycrap888/lou-language" target="_blank" rel="noopener">GitHub</a>
     </p>
   </footer>
 
-</div><!-- /app-wrapper -->
+</div>
 
-<script src="js/lou-engine.js"></script>
-<script src="js/app.js"></script>
-
-<!-- Output card neon lit effect -->
-<script>
-  document.getElementById('btn-convert').addEventListener('click', () => {
-    const card = document.getElementById('output-card');
-    card.classList.add('lit');
-  });
-</script>
+<script src="./js/lou-engine.js"></script>
+<script src="./js/pyodide-bridge.js"></script>
+<script src="./js/app.js"></script>
 
 </body>
 </html>

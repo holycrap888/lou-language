@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ภาษาลู — Lou Language Converter</title>
+  <meta name="description" content="แปลงภาษาไทยเป็นภาษาลู ทำให้ 1 พยางค์กลายเป็น 2 พยางค์">
+  <meta property="og:title" content="ภาษาลู — Lou Language Converter">
+  <meta property="og:description" content="แปลงภาษาไทยเป็นภาษาลูอัตโนมัติ">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌟</text></svg>">
+</head>
+<body>
+
+<div class="app-wrapper">
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <div class="logo-sign">
+      <div class="sign-board">
+        <span class="sign-lou">LOU</span>
+        <span class="sign-lang">ภาษาลู</span>
+      </div>
+    </div>
+    <p class="header-sub">
+      แปลงภาษาไทย → ภาษาลู &nbsp;|&nbsp;
+      <em>1 พยางค์ → 2 พยางค์</em>
+    </p>
+  </header>
+
+  <div class="neon-divider"></div>
+
+  <!-- ── Input Card ── -->
+  <section class="converter-card">
+    <p class="card-label">
+      <span class="dot dot-pink"></span>
+      INPUT — ภาษาไทย
+    </p>
+
+    <textarea
+      id="input"
+      class="input-area"
+      rows="3"
+      maxlength="500"
+      autocomplete="off"
+      autocorrect="off"
+      spellcheck="false"
+    ></textarea>
+
+    <div class="input-meta">
+      <span id="char-count" class="char-count">0 ตัวอักษร</span>
+      <label class="realtime-row">
+        <label class="toggle">
+          <input type="checkbox" id="realtime-toggle">
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+        แปลงอัตโนมัติ
+      </label>
+    </div>
+
+    <div class="btn-row">
+      <button id="btn-convert" class="btn btn-primary">⚡ แปลงเป็นภาษาลู</button>
+      <button id="btn-clear"   class="btn btn-secondary">ล้าง</button>
+    </div>
+
+    <p class="shortcut-hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> เพื่อแปลง</p>
+  </section>
+
+  <!-- ── Output Card ── -->
+  <section class="output-card" id="output-card">
+    <p class="card-label">
+      <span class="dot dot-yellow"></span>
+      OUTPUT — ภาษาลู
+    </p>
+    <div id="output"></div>
+    <div class="output-footer">
+      <button id="btn-copy" class="btn btn-ghost" disabled>คัดลอก</button>
+    </div>
+  </section>
+
+  <!-- ── Syllable debug ── -->
+  <details class="debug-panel">
+    <summary><span class="dot dot-cyan"></span> การแบ่งพยางค์</summary>
+    <div id="syllable-debug"></div>
+  </details>
+
+  <!-- ── Examples ── -->
+  <section>
+    <p class="section-title"><span class="dot dot-pink"></span> ตัวอย่างเร็ว</p>
+    <div id="examples"></div>
+  </section>
+
+  <!-- ── Rules reference ── -->
+  <section>
+    <p class="section-title"><span class="dot dot-cyan"></span> กฎภาษาลู</p>
+    <div class="rules-grid">
+
+      <div class="rule-card">
+        <p class="rule-number">กฎ 1</p>
+        <p class="rule-title">คำทั่วไป</p>
+        <p class="rule-ex">
+          ไม่มี ร/ล ต้น<br>
+          ไม่มีสระ อุ/อู<br>
+          ใช้ <strong>ล</strong> นำหน้า<br>
+          มาก → <span>ลากมูก</span>
+        </p>
+      </div>
+
+      <div class="rule-card">
+        <p class="rule-number">กฎ 2</p>
+        <p class="rule-title">ขึ้นต้น ร/ล</p>
+        <p class="rule-ex">
+          พยัญชนะต้น ร หรือ ล<br>
+          ใช้ <strong>ซ</strong> นำหน้า<br>
+          รัก → <span>ซักรุก</span>
+        </p>
+      </div>
+
+      <div class="rule-card">
+        <p class="rule-number">กฎ 3</p>
+        <p class="rule-title">สระ อุ/อู</p>
+        <p class="rule-ex">
+          มีสระ อุ หรือ อู<br>
+          ใช้ <strong>หล</strong> นำหน้า<br>
+          อู→อี / อุ→อิ<br>
+          ดู → <span>ลูดู</span>
+        </p>
+      </div>
+
+      <div class="rule-card">
+        <p class="rule-number">กฎ 4</p>
+        <p class="rule-title">ร/ล + อุ/อู</p>
+        <p class="rule-ex">
+          ร/ล ต้น + สระ อุ/อู<br>
+          ใช้ <strong>ซ</strong> นำหน้า<br>
+          อู→อี / อุ→อิ<br>
+          รู้ → <span>ซู้รี้</span>
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <p>Lou Language Engine — Pure JavaScript · No AI · No dependencies</p>
+    <p style="margin-top:0.3rem">
+      <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+      &nbsp;·&nbsp;
+      เปิดแก้ไข Source ได้เลย
+    </p>
+  </footer>
+
+</div><!-- /app-wrapper -->
+
+<script src="js/lou-engine.js"></script>
+<script src="js/app.js"></script>
+
+<!-- Output card neon lit effect -->
+<script>
+  document.getElementById('btn-convert').addEventListener('click', () => {
+    const card = document.getElementById('output-card');
+    card.classList.add('lit');
+  });
+</script>
+
+</body>
+</html>
