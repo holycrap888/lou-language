@@ -20,6 +20,9 @@ const PyodideBridge = (() => {
 
   const PYTHON_SETUP = `
 import micropip
+# tzdata ต้อง install ผ่าน micropip ก่อน pythainlp เสมอ
+# เพราะ pythainlp import zoneinfo("Asia/Bangkok") ตอน module load
+await micropip.install('tzdata')
 await micropip.install('pythainlp')
 print("PyThaiNLP installed")
 `;
@@ -90,11 +93,11 @@ print("tokenize_syllables ready")
         indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.27.5/full/',
       });
 
-      // 3. Load micropip + tzdata (required by PyThaiNLP on Pyodide)
+      // 3. Load micropip
       onProgress('โหลด micropip…', 35);
-      await pyodide.loadPackage(['micropip', 'tzdata']);
+      await pyodide.loadPackage('micropip');
 
-      // 4. Install PyThaiNLP
+      // 4. Install tzdata + PyThaiNLP via micropip (order matters)
       onProgress('ติดตั้ง PyThaiNLP…', 55);
       await pyodide.runPythonAsync(PYTHON_SETUP);
 
