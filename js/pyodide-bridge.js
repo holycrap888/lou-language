@@ -90,9 +90,9 @@ print("tokenize_syllables ready")
         indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.27.5/full/',
       });
 
-      // 3. Load micropip
-      onProgress('โหลด micropip…', 40);
-      await pyodide.loadPackage('micropip');
+      // 3. Load micropip + tzdata (required by PyThaiNLP on Pyodide)
+      onProgress('โหลด micropip…', 35);
+      await pyodide.loadPackage(['micropip', 'tzdata']);
 
       // 4. Install PyThaiNLP
       onProgress('ติดตั้ง PyThaiNLP…', 55);
