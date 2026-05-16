@@ -48,7 +48,7 @@ def tokenize_syllables(text):
             continue
         if re.match(r'[\\u0E00-\\u0E7F]', seg):
             # Thai segment: tokenize into syllables
-            syls = syllable_tokenize(seg, engine='han_solo')
+            syls = syllable_tokenize(seg, engine='newmm')
             result.extend(syls)
         else:
             # Non-Thai: keep as-is
