@@ -29,31 +29,27 @@ print("PyThaiNLP installed")
 
   const PYTHON_TOKENIZE = `
 from pythainlp.tokenize import syllable_tokenize
-import json
+import json, re
+
+# ตรวจสอบ engines ที่ใช้ได้
+try:
+    from pythainlp.tokenize.core import DEFAULT_SYLLABLE_TOKENIZE_ENGINE
+    print("default syllable engine:", DEFAULT_SYLLABLE_TOKENIZE_ENGINE)
+except:
+    pass
 
 def tokenize_syllables(text):
-    """
-    ตัดพยางค์ภาษาไทย คืน JSON array ของ syllables
-    เว้นวรรคและ non-Thai tokens จะถูกส่งผ่านไปตรงๆ
-    """
     result = []
-    current_non_thai = ""
-    
-    # Split text into Thai and non-Thai segments
-    import re
-    segments = re.split(r'([\\u0E00-\\u0E7F]+)', text)
-    
+    segments = re.split(r'([\u0E00-\u0E7F]+)', text)
     for seg in segments:
         if not seg:
             continue
-        if re.match(r'[\\u0E00-\\u0E7F]', seg):
-            # Thai segment: tokenize into syllables
-            syls = syllable_tokenize(seg, engine='newmm')
+        if re.match(r'[\u0E00-\u0E7F]', seg):
+            # ใช้ default engine (ไม่ระบุ engine)
+            syls = syllable_tokenize(seg)
             result.extend(syls)
         else:
-            # Non-Thai: keep as-is
             result.append(seg)
-    
     return json.dumps(result, ensure_ascii=False)
 
 print("tokenize_syllables ready")
