@@ -86,26 +86,46 @@ def tcc_tokenize(text):
     return syllables
 
 def tokenize_syllables(text):
+    THAI_CONS = set('กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรลวศษสหฬอฮ')
+    
+    def is_single_cons(s):
+        # single consonant with no vowel markers
+        return len(s) == 1 and s in THAI_CONS
+
+    def has_vowel(s):
+        # has at least one vowel marker or leading vowel
+        return bool(re.search(r'[\u0E30-\u0E4E\u0E40-\u0E44]', s))
+
     result = []
     for seg in re.split(r'([\u0E00-\u0E7F]+)', text):
         if not seg:
             continue
         if re.match(r'[\u0E00-\u0E7F]', seg):
             syls = tcc_tokenize(seg)
-            # Post-process: merge stray single consonants back into previous syllable
-            # TCC often splits final consonants: ขอบ→['ขอ','บ'], เที่ยว→['เที่ย','ว']
+            
+            # Pass 1: merge forward — อ เดี่ยวๆ ที่ไม่มี vowel ควร merge กับ token ถัดไป
+            # e.g. ['อ', 'ยาก'] → ['อยาก']
+            fwd = []
+            i = 0
+            while i < len(syls):
+                s = syls[i]
+                if is_single_cons(s) and not has_vowel(s) and i + 1 < len(syls):
+                    # merge forward
+                    fwd.append(s + syls[i+1])
+                    i += 2
+                else:
+                    fwd.append(s)
+                    i += 1
+            
+            # Pass 2: merge backward — single consonant หลัง syllable ที่มี vowel = final cons
+            # e.g. ['ขอ', 'บ'] → ['ขอบ'], ['เที่ย', 'ว'] → ['เที่ยว']
             merged = []
-            for s in syls:
-                # single Thai consonant (no vowel markers) = stray final cons
-                is_single_cons = (
-                    len(s) == 1 and
-                    re.match(r'[\u0E01-\u0E2E\u0E30-\u0E4E]', s) and
-                    merged
-                )
-                if is_single_cons:
+            for s in fwd:
+                if is_single_cons(s) and merged:
                     merged[-1] = merged[-1] + s
                 else:
                     merged.append(s)
+            
             result.extend(merged)
         else:
             result.append(seg)
