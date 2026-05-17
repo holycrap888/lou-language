@@ -92,11 +92,17 @@ def tokenize_syllables(text):
             continue
         if re.match(r'[\u0E00-\u0E7F]', seg):
             syls = tcc_tokenize(seg)
-            # Post-process: merge stray ว/ย that got split from previous syllable
-            # e.g. เที่ยว → ['เที่ย', 'ว'] should merge to ['เที่ยว']
+            # Post-process: merge stray single consonants back into previous syllable
+            # TCC often splits final consonants: ขอบ→['ขอ','บ'], เที่ยว→['เที่ย','ว']
             merged = []
             for s in syls:
-                if s in ('ว', 'ย') and merged:
+                # single Thai consonant (no vowel markers) = stray final cons
+                is_single_cons = (
+                    len(s) == 1 and
+                    re.match(r'[\u0E01-\u0E2E\u0E30-\u0E4E]', s) and
+                    merged
+                )
+                if is_single_cons:
                     merged[-1] = merged[-1] + s
                 else:
                     merged.append(s)
