@@ -87,14 +87,13 @@ def tcc_tokenize(text):
 
 def tokenize_syllables(text):
     THAI_CONS = set('กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรลวศษสหฬอฮ')
-    
+
     def is_single_cons(s):
-        # single consonant with no vowel markers
         return len(s) == 1 and s in THAI_CONS
 
-    def has_vowel(s):
-        # has at least one vowel marker or leading vowel
-        return bool(re.search(r'[\u0E30-\u0E4E\u0E40-\u0E44]', s))
+    def starts_with_o_vowel(s):
+        # token ที่ขึ้นต้นด้วย อ ในฐานะ vowel body (อบ อง อน ออ)
+        return len(s) >= 2 and s[0] == 'อ' and s[1] in THAI_CONS
 
     result = []
     for seg in re.split(r'([\u0E00-\u0E7F]+)', text):
@@ -102,30 +101,32 @@ def tokenize_syllables(text):
             continue
         if re.match(r'[\u0E00-\u0E7F]', seg):
             syls = tcc_tokenize(seg)
-            
-            # Pass 1: merge forward — อ เดี่ยวๆ ที่ไม่มี vowel ควร merge กับ token ถัดไป
-            # e.g. ['อ', 'ยาก'] → ['อยาก']
+
+            # Pass 1 (forward): อ เดี่ยว merge กับ token ถัดไป
             fwd = []
             i = 0
             while i < len(syls):
                 s = syls[i]
-                if is_single_cons(s) and not has_vowel(s) and i + 1 < len(syls):
-                    # merge forward
+                if s == 'อ' and i + 1 < len(syls):
                     fwd.append(s + syls[i+1])
                     i += 2
                 else:
                     fwd.append(s)
                     i += 1
-            
-            # Pass 2: merge backward — single consonant หลัง syllable ที่มี vowel = final cons
-            # e.g. ['ขอ', 'บ'] → ['ขอบ'], ['เที่ย', 'ว'] → ['เที่ยว']
+
+            # Pass 2: merge — single cons + อXX token → merge forward (ช+อบ=ชอบ)
+            #          single cons after voweled token → merge backward (ขอ+บ=ขอบ)
             merged = []
             for s in fwd:
-                if is_single_cons(s) and merged:
+                if starts_with_o_vowel(s) and merged and is_single_cons(merged[-1]):
+                    # ช + อบ → ชอบ
+                    merged[-1] = merged[-1] + s
+                elif is_single_cons(s) and merged:
+                    # ขอ + บ → ขอบ
                     merged[-1] = merged[-1] + s
                 else:
                     merged.append(s)
-            
+
             result.extend(merged)
         else:
             result.append(seg)
