@@ -1,12 +1,15 @@
 /**
- * Lou Language Engine v13
+ * Lou Language Engine v18 — clean rewrite
  *
- * PREFIX = leadVow + newInitial + สระเดิม + tone + finalCons  (ไม่มีแค่ cluster กับ silent)
- * SUFFIX = initial + cluster + อู/อุ + tone + finalCons
+ * PREFIX = leadVow + pfxCons + [cluster ถ้าเป็น semivowel ว/ย] + สระ + tone + finalCons
+ *          (ตัดแค่ stop/nasal cluster ออก, เก็บ semivowel cluster ว/ย)
  *
- * ใ/ไ pattern (ไม่มี initial หรือมี initial):
- *   prefix = leadVow + ล (+ tone ถ้ามี, ไม่มี finalCons ใน prefix)
- *   suffix = finalCons + อู/อุ + tone [+ ย ถ้า mai ek]
+ * SUFFIX = initial + cluster + สระใหม่ + tone + normFinal
+ *   - อ initial + cluster → ห + cluster  (อยาก→หยูก, ออก→อ no cluster→อูก)
+ *   - trailVow อ → อยู่ใน prefix แต่ไม่ใน suffix  (ลอง prefix=ซอง, suffix=ลูง)
+ *
+ * หล/ล: HIGH_CLASS + อ + ป → หล, อื่น → ล
+ * ส/ซ:  ห+ร/ล cluster → ส, ร/ล initial → ซ
  */
 
 const LouEngine = (() => {
@@ -23,12 +26,29 @@ const LouEngine = (() => {
   const SARA_A    = '\u0E30';
   const O_CONS    = '\u0E2D';
 
+  const HIGH_CLASS   = 'ขฃฉฐถผฝศษสห';
+  const SEMIVOWELS   = 'วย'; // clusters that are vowel components
+
+  const FINAL_MAP = {
+    'ข':'ก','ค':'ก','ฆ':'ก',
+    'ต':'ด','ถ':'ด','ท':'ด','ธ':'ด','ฎ':'ด','ฏ':'ด',
+    'พ':'บ','ภ':'บ','ผ':'บ','ฝ':'บ','ป':'บ',
+  };
+  const normFinal = c => FINAL_MAP[c] || c;
+
   const isCons    = c => CONS.includes(c);
   const isLeadVow = c => LEAD_VOW.includes(c);
   const isAboveVow= c => ABOVE_VOW.includes(c) || c === SARA_AM;
   const isBelowVow= c => BELOW_VOW.includes(c);
   const isTone    = c => TONE.includes(c);
   const isThai    = c => { const p = c.codePointAt(0); return p >= 0x0E00 && p <= 0x0E7F; };
+  const isSemivowel = c => SEMIVOWELS.includes(c);
+
+  // needs หล: HIGH class, อ, or ป
+  const needsHL   = init => HIGH_CLASS.includes(init) || init === O_CONS || init === 'ป';
+  const getPfxL   = init => needsHL(init) ? 'หล' : 'ล';
+  const getPfxRL  = (init, clus) =>
+    (init === 'ห' && (clus === 'ร' || clus === 'ล')) ? 'ส' : 'ซ';
 
   // ── Analyser ───────────────────────────────────────────────────────────────
   function analyse(syl) {
@@ -38,35 +58,47 @@ const LouEngine = (() => {
 
     if (i < ch.length && isLeadVow(ch[i])) r.leadVow = ch[i++];
 
-    // ใ/ไ special: ไป=leadVow+finalCons, ไหน=leadVow+initial+finalCons
+    // ใ/ไ special
     if ((r.leadVow === 'ใ' || r.leadVow === 'ไ') && i < ch.length && isCons(ch[i])) {
-      const cons1 = ch[i];
-      const nxt   = ch[i+1];
-      if (nxt && isCons(nxt)) {
-        // ไหน = ห(initial) + น(final)
-        r.initial   = cons1; i++;
-        r.finalCons = ch[i]; i++;
+      const c1 = ch[i], c2 = ch[i+1];
+      if (c2 && isCons(c2) && !isTone(c2) && c2 !== SILENT) {
+        r.initial = c1; i++;
+        r.finalCons = ch[i++];
       } else {
-        // ไป ไม่ ใจ = finalCons เดี่ยว
-        r.finalCons = cons1; i++;
+        r.finalCons = c1; i++;
       }
       while (i < ch.length && isTone(ch[i]))  r.tone   += ch[i++];
       while (i < ch.length && ch[i]===SILENT) r.silent += ch[i++];
       return r;
     }
 
-    if (i < ch.length && isCons(ch[i]))     r.initial = ch[i++];
-    if (i < ch.length && isCons(ch[i])) {
+    if (i < ch.length && isCons(ch[i])) r.initial = ch[i++];
+
+    // cluster: second cons followed by vowel mark, tone, or is last/second-to-last cons
+    // ยกเว้น: อ ไม่เป็น cluster — อ เป็น vowel body (trailVow)
+    if (i < ch.length && isCons(ch[i]) && ch[i] !== O_CONS) {
       const nxt = ch[i+1];
-      if (nxt && (isAboveVow(nxt)||isBelowVow(nxt)||isTone(nxt)||nxt===SARA_AA||nxt===SARA_A))
+      const afterIsVowelMark = nxt && (isAboveVow(nxt)||isBelowVow(nxt)||isTone(nxt)||
+                                        nxt===SARA_AA||nxt===SARA_A||nxt===SARA_AM);
+      const afterIsFinalCons = nxt && isCons(nxt) && (!ch[i+2] || isTone(ch[i+2]) || ch[i+2]===SILENT);
+      const isLast = !nxt || isTone(nxt) || nxt===SILENT;
+      if (!isLast && (afterIsVowelMark || afterIsFinalCons || isSemivowel(ch[i]))) {
         r.cluster = ch[i++];
+      }
     }
+
     while (i < ch.length && isAboveVow(ch[i]))  r.aboveVow += ch[i++];
     while (i < ch.length && isBelowVow(ch[i]))  r.belowVow += ch[i++];
     while (i < ch.length && isTone(ch[i]))       r.tone     += ch[i++];
-    if (i < ch.length && ch[i] === O_CONS && !r.aboveVow && !r.belowVow && !r.leadVow)
-      r.trailVow += ch[i++];
+
+    // อ as vowel body (trailVow)
+    if (i < ch.length && ch[i] === O_CONS) {
+      const prevHasSaraUe = r.aboveVow.includes('\u0E37');
+      const noVowelYet = !r.aboveVow && !r.belowVow;
+      if (prevHasSaraUe || noVowelYet) r.trailVow += ch[i++];
+    }
     while (i < ch.length && (ch[i]===SARA_AA||ch[i]===SARA_A)) r.trailVow += ch[i++];
+
     if (i < ch.length && isCons(ch[i])) {
       const nxt = ch[i+1];
       if (!nxt || isTone(nxt) || nxt===SILENT) r.finalCons = ch[i++];
@@ -88,6 +120,8 @@ const LouEngine = (() => {
     if (a.trailVow.includes(SARA_AA)) return true;
     if (a.trailVow.includes(SARA_A))  return false;
     if (a.trailVow === O_CONS) return true;
+    // semivowel cluster เป็น vowel = long
+    if (!a.aboveVow && !a.belowVow && !a.trailVow && !a.leadVow && isSemivowel(a.cluster)) return true;
     if (a.leadVow === 'เ') return a.trailVow !== SARA_A;
     if (a.leadVow === 'แ' || a.leadVow === 'โ') return true;
     if (a.leadVow === 'ใ' || a.leadVow === 'ไ') return a.tone !== MAI_EK;
@@ -96,11 +130,8 @@ const LouEngine = (() => {
   }
 
   const hasU  = a => a.belowVow === 'ุ' || a.belowVow === 'ู';
-  const hasRL = a => {
-    if (a.initial === 'ร' || a.initial === 'ล') return true;
-    if (a.initial === 'ห' && (a.cluster === 'ร' || a.cluster === 'ล')) return true;
-    return false;
-  };
+  const hasRL = a => a.initial === 'ร' || a.initial === 'ล'
+                  || (a.initial === 'ห' && (a.cluster === 'ร' || a.cluster === 'ล'));
 
   function render(a, ov={}) {
     const o = {...a, ...ov};
@@ -109,17 +140,47 @@ const LouEngine = (() => {
          + o.trailVow + o.finalCons + o.silent;
   }
 
-  // PREFIX: ไม่มี cluster และ silent เท่านั้น (คง finalCons ไว้)
-  function mkPrefix(a, newInit) {
-    return render(a, { initial: newInit, cluster:'', silent:'' });
+  // PREFIX: ตัด stop/nasal cluster ออก แต่เก็บ semivowel cluster (ว ย)
+  // normalize finalCons ด้วย
+  function mkPrefix(a, pfxCons) {
+    const keepClus = isSemivowel(a.cluster) && !a.aboveVow && !a.belowVow && !a.trailVow;
+    return render(a, {
+      initial: pfxCons,
+      cluster: keepClus ? a.cluster : '',
+      finalCons: a.aboveVow === SARA_AM ? 'ม' : normFinal(a.finalCons),
+      silent:''
+    });
   }
 
-  // SUFFIX ทั่วไป
+  // SUFFIX initial part:
+  //   อ + semivowel cluster → ห + cluster (อยาก→หย, but ออก→อ no cluster)
+  //   ห + ร/ล cluster → keep both (หรือ→หร, หลับ→หล, หมู→หม, หวาน→หว)
+  //   otherwise → initial + cluster (ครับ→คร, สวย→ส only)
+  function getSuffixStr(a, newVowel, finalStr) {
+    let init;
+    if (a.initial === O_CONS && a.cluster) {
+      init = 'ห' + a.cluster; // อ+cluster → ห+cluster (อยาก→หยูก)
+    } else if (a.initial === O_CONS) {
+      init = 'อ'; // ออก → อ
+    } else if (isSemivowel(a.cluster) && !a.aboveVow && !a.belowVow && !a.trailVow) {
+      // semivowel เป็นสระ ไม่ติดใน suffix (สวย suffix=สูย ไม่ใช่ สวูย)
+      init = a.initial;
+    } else {
+      // cluster ติดใน suffix: ครับ→คร, หลับ→หล, หรือ→หร, หวาน→หว, หมู→หม
+      init = a.initial + a.cluster;
+    }
+    return init + newVowel + a.tone + finalStr;
+  }
+
   function mkSuffix(a, long) {
     const vowel = long ? 'ู' : 'ุ';
-    let fin = a.finalCons;
-    if (a.aboveVow === SARA_AM) fin = 'ม';
-    return a.initial + a.cluster + vowel + a.tone + fin;
+    const fin   = a.aboveVow === SARA_AM ? 'ม' : normFinal(a.finalCons);
+    return getSuffixStr(a, vowel, fin);
+  }
+
+  function mkSuffixU(a, isLongU) {
+    const vow = isLongU ? '\u0E35' : '\u0E34';
+    return getSuffixStr(a, vow, normFinal(a.finalCons));
   }
 
   // ── Transform ──────────────────────────────────────────────────────────────
@@ -134,50 +195,46 @@ const LouEngine = (() => {
 
     // ใ/ไ pattern
     if (a.leadVow === 'ไ' || a.leadVow === 'ใ') {
-      // prefix = leadVow + ล + tone (ไม่มี finalCons)
       const pfx = a.leadVow + 'ล' + a.tone;
       const vowel = long ? 'ู' : 'ุ';
-
       if (!a.initial) {
-        // ไป→ปู  ไม่→มุ่ย  ใจ→จู  ไว้→วู้
-        const extraFin = (a.tone === MAI_EK) ? 'ย' : '';
-        return pfx + ' ' + a.finalCons + vowel + a.tone + extraFin;
-      } else {
-        // ไหน→ไล หนู  (initial=ห, final=น)
-        return pfx + ' ' + a.initial + a.finalCons + vowel + a.tone;
+        return pfx + ' ' + a.finalCons + vowel + a.tone + (a.tone === MAI_EK ? 'ย' : '');
       }
+      return pfx + ' ' + a.initial + a.finalCons + vowel + a.tone;
     }
 
-    // Rule 4: ร/ล + อุ/อู
+    // ำ special
+    if (a.aboveVow === SARA_AM) {
+      const pfxCons = _hasRL ? getPfxRL(a.initial, a.cluster) : getPfxL(a.initial);
+      return pfxCons + '\u0E31' + a.tone + 'ม' + ' ' + a.initial + 'ุ' + a.tone + 'ม';
+    }
+
+    // Rule 4
     if (_hasRL && _hasU) {
-      // อู+mai_ek = short → อิ
       const isLongU = a.belowVow === 'ู' && a.tone !== MAI_EK;
-      const vow = isLongU ? '\u0E35' : '\u0E34';
-      return mkPrefix(a, 'ซ') + ' ' + a.initial + a.cluster + vow + a.tone + a.finalCons;
+      return mkPrefix(a, getPfxRL(a.initial, a.cluster)) + ' ' + mkSuffixU(a, isLongU);
     }
 
-    // Rule 3: อุ/อู ไม่มี ร/ล
+    // Rule 3
     if (_hasU && !_hasRL) {
       const isLongU = a.belowVow === 'ู' && a.tone !== MAI_EK;
-      const vow = isLongU ? '\u0E35' : '\u0E34';
-      return mkPrefix(a, 'หล') + ' ' + a.initial + a.cluster + vow + a.tone + a.finalCons;
+      return mkPrefix(a, getPfxL(a.initial)) + ' ' + mkSuffixU(a, isLongU);
     }
 
-    // Rule 2: ร/ล
-    if (_hasRL) return mkPrefix(a, 'ซ') + ' ' + mkSuffix(a, long);
+    // Rule 2
+    if (_hasRL) return mkPrefix(a, getPfxRL(a.initial, a.cluster)) + ' ' + mkSuffix(a, long);
 
     // Rule 1
-    return mkPrefix(a, 'ล') + ' ' + mkSuffix(a, long);
+    return mkPrefix(a, getPfxL(a.initial)) + ' ' + mkSuffix(a, long);
   }
 
   function convertSyllables(syllables) {
     return syllables.map(s => ([...s].some(isThai) ? transformSyllable(s) : s)).join(' ');
   }
-
   function convertRaw(text) {
     return [...text.split(/([^\u0E00-\u0E7F]+)/u)]
       .filter(Boolean)
-      .map(part => [...part].some(isThai) ? transformSyllable(part) : part)
+      .map(p => [...p].some(isThai) ? transformSyllable(p) : p)
       .join('');
   }
 
