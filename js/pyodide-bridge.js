@@ -91,7 +91,16 @@ def tokenize_syllables(text):
         if not seg:
             continue
         if re.match(r'[\u0E00-\u0E7F]', seg):
-            result.extend(tcc_tokenize(seg))
+            syls = tcc_tokenize(seg)
+            # Post-process: merge stray ว/ย that got split from previous syllable
+            # e.g. เที่ยว → ['เที่ย', 'ว'] should merge to ['เที่ยว']
+            merged = []
+            for s in syls:
+                if s in ('ว', 'ย') and merged:
+                    merged[-1] = merged[-1] + s
+                else:
+                    merged.append(s)
+            result.extend(merged)
         else:
             result.append(seg)
     return json.dumps(result, ensure_ascii=False)
