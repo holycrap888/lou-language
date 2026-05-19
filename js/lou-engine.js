@@ -33,9 +33,14 @@ const LouEngine = (() => {
   const SEMIVOWELS  = 'วย';
 
   const FINAL_MAP = {
+    // velar stops
     'ข':'ก','ค':'ก','ฆ':'ก',
+    // dental stops
     'ต':'ด','ถ':'ด','ท':'ด','ธ':'ด','ฎ':'ด','ฏ':'ด',
-    'พ':'บ','ภ':'บ','ผ':'บ','ฝ':'บ','ป':'บ',
+    'ศ':'ด','ษ':'ด','ส':'ด','ซ':'ด',
+    'จ':'ด','ช':'ด','ฌ':'ด','ญ':'ด','ฑ':'ด','ฒ':'ด','ณ':'ด',
+    // bilabial stops
+    'พ':'บ','ภ':'บ','ผ':'บ','ฝ':'บ','ป':'บ','ฟ':'บ',
   };
   const normFinal   = c => FINAL_MAP[c] || c;
 
@@ -47,7 +52,7 @@ const LouEngine = (() => {
   const isSemivowel = c => SEMIVOWELS.includes(c);
   const isThai      = c => { const p = c.codePointAt(0); return p >= 0x0E00 && p <= 0x0E7F; };
 
-  const needsHL  = i => HIGH_CLASS.includes(i) || i === O_CONS || i === 'ป';
+  const needsHL  = i => HIGH_CLASS.includes(i) || i === O_CONS || i === 'ป' || i === 'ว';
   const getPfxL  = i => needsHL(i) ? 'หล' : 'ล';
   const getPfxRL = (i, c) => (i === 'ห' && (c === 'ร' || c === 'ล')) ? 'ส' : 'ซ';
 
@@ -109,7 +114,7 @@ const LouEngine = (() => {
   function isLong(a) {
     if (a.belowVow === 'ู') return true;
     if (a.belowVow === 'ุ') return false;
-    if (a.aboveVow === '\u0E35' || a.aboveVow === '\u0E37') return true;
+    if (a.aboveVow && (a.aboveVow === '\u0E35' || a.aboveVow === '\u0E37')) return true;
     if (a.aboveVow === '\u0E34') return false;
     if (a.aboveVow === '\u0E36') return false;
     if (a.aboveVow === MAI_HAN)  return false;
@@ -117,7 +122,7 @@ const LouEngine = (() => {
     if (a.trailVow.includes(SARA_AA)) return true;
     if (a.trailVow.includes(SARA_A))  return false;
     if (a.trailVow === O_CONS || a.trailVow === O_CONS + '') return true;
-    if (!a.aboveVow && !a.belowVow && !a.trailVow && !a.leadVow && isSemivowel(a.cluster)) return true;
+    if (!a.aboveVow && !a.belowVow && !a.trailVow && !a.leadVow && a.cluster && isSemivowel(a.cluster)) return true;
     if (a.leadVow === 'เ') {
       // เ-ีย = long, เ-็ = short
       if (a.trailVow === 'ย') return true;
@@ -127,6 +132,8 @@ const LouEngine = (() => {
     // ไ/ใ: short เสมอ ยกเว้น mai tho → long
     if (a.leadVow === 'ไ' || a.leadVow === 'ใ') return a.tone === MAI_THO;
     if (!a.aboveVow && !a.belowVow && !a.trailVow && !a.leadVow && a.finalCons) return false;
+    // ไม่มี vowel เลย ไม่มี finalCons → implicit สระอะ = short
+    if (!a.aboveVow && !a.belowVow && !a.trailVow && !a.leadVow && !a.finalCons) return false;
     return true;
   }
 
@@ -136,9 +143,12 @@ const LouEngine = (() => {
 
   function render(a, ov={}) {
     const o = {...a, ...ov};
+    // implicit สระอะ: ถ้าไม่มี vowel เลย ใส่ ะ
+    const needsSaraA = !o.leadVow && !o.aboveVow && !o.belowVow && !o.trailVow && o.initial && !o.finalCons;
     return o.leadVow + o.initial + o.cluster
          + o.aboveVow + o.belowVow + o.tone
-         + o.trailVow + o.finalCons + o.silent;
+         + (needsSaraA ? SARA_A : o.trailVow)
+         + o.finalCons + o.silent;
   }
 
   // PREFIX สำหรับ ไ/ใ: pfxCons + ัย (ไม่มี tone — tone อยู่ใน suffix)
@@ -164,6 +174,12 @@ const LouEngine = (() => {
     if (a.initial === O_CONS && a.cluster) return 'ห' + a.cluster;
     if (a.initial === O_CONS) return 'อ';
     if (isSemivowel(a.cluster) && !a.aboveVow && !a.belowVow && !a.trailVow) return a.initial;
+    // needsHL initials: suffix เติม ห นำ initial (วัส→หวุด, ฝัน→ฝุน ← wait ฝ→ฝ ไม่ใช่ หฝ)
+    // จาก example: วัส→หวุด แต่ ฝัน→ฝุน ← ฝ ไม่มี ห นำใน suffix
+    // ว เป็น semivowel ที่พิเศษ — เมื่อเป็น initial ที่ต้องการ หล prefix → suffix ใช้ หว
+    // แต่ ฝ ส → suffix ใช้ ฝ ส ตรงๆ
+    // กฎ: เฉพาะ ว (semivowel initial) เท่านั้นที่ suffix ต้องการ ห นำ
+    if (a.initial === 'ว') return 'หว';
     return a.initial + a.cluster;
   }
 

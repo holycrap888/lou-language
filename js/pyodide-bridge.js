@@ -87,12 +87,16 @@ def tcc_tokenize(text):
 
 def tokenize_syllables(text):
     THAI_CONS = set('กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรลวศษสหฬอฮ')
+    LEAD_VOWELS = set('เแโใไ')
 
     def is_single_cons(s):
         return len(s) == 1 and s in THAI_CONS
 
+    def starts_with_lead_vowel(s):
+        return len(s) > 0 and s[0] in LEAD_VOWELS
+
     def starts_with_o_vowel(s):
-        # token ที่ขึ้นต้นด้วย อ ในฐานะ vowel body (อบ อง อน ออ)
+        # อXX = อ vowel body (อบ อง)
         return len(s) >= 2 and s[0] == 'อ' and s[1] in THAI_CONS
 
     result = []
@@ -102,27 +106,28 @@ def tokenize_syllables(text):
         if re.match(r'[\u0E00-\u0E7F]', seg):
             syls = tcc_tokenize(seg)
 
-            # Pass 1 (forward): อ เดี่ยว merge กับ token ถัดไป
+            # Pass 1 (forward): single cons ที่ตามด้วย token ที่ขึ้นต้นด้วย vowel marker
+            # หรือ leading vowel → cons นั้นเป็น initial ของ token ถัดไป
+            # e.g. ส+วัส=สวัส, อ+ยาก=อยาก, ช+อบ=ชอบ
             fwd = []
             i = 0
             while i < len(syls):
                 s = syls[i]
-                if s == 'อ' and i + 1 < len(syls):
-                    fwd.append(s + syls[i+1])
-                    i += 2
-                else:
-                    fwd.append(s)
-                    i += 1
+                if is_single_cons(s) and i + 1 < len(syls):
+                    nxt = syls[i+1]
+                    # merge forward ถ้า token ถัดไปขึ้นต้นด้วย vowel (อXX, เXX, etc.)
+                    # หรือ token ปัจจุบันเป็น อ (vowel carrier)
+                    if s == 'อ' or starts_with_o_vowel(nxt) or starts_with_lead_vowel(nxt):
+                        fwd.append(s + nxt)
+                        i += 2
+                        continue
+                fwd.append(syls[i])
+                i += 1
 
-            # Pass 2: merge — single cons + อXX token → merge forward (ช+อบ=ชอบ)
-            #          single cons after voweled token → merge backward (ขอ+บ=ขอบ)
+            # Pass 2 (backward): single cons ที่เหลือ = final cons ของ token ก่อนหน้า
             merged = []
             for s in fwd:
-                if starts_with_o_vowel(s) and merged and is_single_cons(merged[-1]):
-                    # ช + อบ → ชอบ
-                    merged[-1] = merged[-1] + s
-                elif is_single_cons(s) and merged:
-                    # ขอ + บ → ขอบ
+                if is_single_cons(s) and merged:
                     merged[-1] = merged[-1] + s
                 else:
                     merged.append(s)
